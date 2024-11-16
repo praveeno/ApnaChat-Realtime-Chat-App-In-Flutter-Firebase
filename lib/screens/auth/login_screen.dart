@@ -9,6 +9,7 @@ import '../../api/apis.dart';
 import '../../helper/dialogs.dart';
 import '../../main.dart';
 import '../home_screen.dart';
+import 'signup_screen.dart';
 
 //login screen -- implements google sign in or sign up feature for app
 class LoginScreen extends StatefulWidget {
@@ -20,6 +21,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _isAnimate = false;
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -108,6 +113,79 @@ class _LoginScreenState extends State<LoginScreen> {
             duration: const Duration(seconds: 1),
             child: Image.asset('assets/images/icon.png')),
 
+        // Login form
+        Positioned(
+          top: mq.height * .3,
+          left: mq.width * .05,
+          width: mq.width * .9,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Email field
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your email';
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: mq.height * .02),
+
+                // Password field
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your password';
+                    }
+                    return null;
+                  },
+                ),
+                SizedBox(height: mq.height * .03),
+
+                // Login button
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _handleEmailLogin,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(mq.width * .9, 45),
+                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator()
+                      : const Text('Login'),
+                ),
+
+                // Sign up link
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SignupScreen()),
+                    );
+                  },
+                  child: const Text('Don\'t have an account? Sign Up'),
+                ),
+
+                const Text('OR', style: TextStyle(fontSize: 16)),
+                SizedBox(height: mq.height * .02),
+              ],
+            ),
+          ),
+        ),
+
         //google login button
         Positioned(
             bottom: mq.height * .15,
@@ -140,5 +218,44 @@ class _LoginScreenState extends State<LoginScreen> {
                 ))),
       ]),
     );
+  }
+
+  void _handleEmailLogin() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      try {
+        final credential = await APIs.auth.signInWithEmailAndPassword(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+
+        if (credential.user != null) {
+          if (await APIs.userExists() && mounted) {
+            Navigator.pushReplacement(
+                context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+          } else {
+            await APIs.createUser().then((value) {
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+            });
+          }
+        }
+      } on FirebaseAuthException catch (e) {
+        if (mounted) {
+          if (e.code == 'user-not-found') {
+            Dialogs.showSnackbar(context, 'No user found with this email');
+          } else if (e.code == 'wrong-password') {
+            Dialogs.showSnackbar(context, 'Wrong password');
+          } else {
+            Dialogs.showSnackbar(context, e.message ?? 'An error occurred');
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          Dialogs.showSnackbar(context, 'An error occurred');
+        }
+      }
+      setState(() => _isLoading = false);
+    }
   }
 }
